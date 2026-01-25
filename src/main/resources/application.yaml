@@ -1,0 +1,73 @@
+server:
+  port: ${SERVER_PORT:8080}
+  forward-headers-strategy: framework
+
+spring:
+  application:
+    name: vectorcheck-api
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/testVector}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 1
+    locations: classpath:db/migration
+
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
+            scope:
+              - openid
+              - profile
+              - email
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+
+          github:
+            client-id: ${GITHUB_CLIENT_ID}
+            client-secret: ${GITHUB_CLIENT_SECRET}
+            scope:
+              - read:user
+              - user:email
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+
+app:
+  oauth2:
+    redirect-success: ${OAUTH2_REDIRECT_SUCCESS:http://localhost:3000/oauth2/success}
+    redirect-failure: ${OAUTH2_REDIRECT_FAILURE:http://localhost:3000/oauth2/failure}
+
+security:
+  jwt:
+    # Deve ser BASE64 (>= 32 bytes)
+    secret: ${JWT_SECRET_BASE64}
+    issuer: ${JWT_ISSUER:vectorlabs}
+    access-ttl-seconds: ${JWT_ACCESS_TTL_SECONDS:3600}        # 1h
+    refresh-ttl-seconds: ${JWT_REFRESH_TTL_SECONDS:1209600}  # 14d
+
+logging:
+  level:
+    org.springframework.security: INFO
+    org.springframework.security.oauth2: INFO
+
+payments:
+  mercadopago:
+    baseUrl: ${MERCADOPAGO_BASE_URL:https://api.mercadopago.com}
+    accessToken: ${MERCADO_PAGO_ACCESS_TOKEN}
+    notificationUrl: ${MERCADOPAGO_NOTIFICATION_URL}
+    currencyId: ${MERCADOPAGO_CURRENCY:BRL}
