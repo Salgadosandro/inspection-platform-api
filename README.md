@@ -38,4 +38,4 @@ src/main/java/com/vectorlabs
 ├── model # JPA entities
 ├── repository # Spring Data repositories
 ├── service # Business logic
-└── validator # Domain validation layer
+└── validator # Domain validation layer.
