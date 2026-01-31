@@ -70,6 +70,7 @@ public class AppUserService {
         applyUpdate(user, dto);
         return repository.save(user);
     }
+
     @Transactional
     public AppUser updateMe(UpdateAppUserDTO dto, AppUser logged) {
         Objects.requireNonNull(dto, "UpdateAppUserDTO cannot be null");
@@ -81,6 +82,7 @@ public class AppUserService {
         applyUpdate(user, dto);
         return repository.save(user);
     }
+
     @Transactional(readOnly = true)
     public Page<AppUser> search(SearchAppUserDTO filter, Pageable pageable) {
         Objects.requireNonNull(filter, "SearchAppUserDTO cannot be null");
@@ -88,11 +90,13 @@ public class AppUserService {
         Specification<AppUser> spec = AppUserSpecs.fromFilter(filter, validator);
         return repository.findAll(spec, pageable);
     }
+
     @Transactional
     public AppUser patch(UUID id, UpdateAppUserDTO dto) {
         // Patch aqui reaproveita o update (e o controller deve proteger com @PreAuthorize)
         return update(id, dto);
     }
+
     @Transactional
     public void softDelete(UUID id) {
         validator.requireId(id);
@@ -103,6 +107,7 @@ public class AppUserService {
         user.setEnabled(false);
         repository.save(user);
     }
+
     @Transactional
     public AppUser deleteById(UUID id) {
         validator.requireId(id);
@@ -112,6 +117,7 @@ public class AppUserService {
         repository.delete(user);
         return user;
     }
+
     @Transactional
     public AppUser softDeleteMe(AppUser logged) {
         Objects.requireNonNull(logged, "Logged user cannot be null");
