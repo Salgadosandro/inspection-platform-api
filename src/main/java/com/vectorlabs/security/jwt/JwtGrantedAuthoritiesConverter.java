@@ -4,28 +4,23 @@ import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.stream.Collectors;
 
-@Component
 public class JwtGrantedAuthoritiesConverter implements Converter<Jwt, Collection<GrantedAuthority>> {
 
     @Override
-    @SuppressWarnings("unchecked")
     public Collection<GrantedAuthority> convert(Jwt jwt) {
-
-        Object raw = jwt.getClaims().get(JwtService.CLAIM_ROLES);
-        if (raw == null) return List.of();
-
-        // Esperado: ["ROLE_ADMIN", "ROLE_CLIENT"]
-        List<String> roles = (List<String>) raw;
+        List<String> roles = jwt.getClaimAsStringList("roles"); // ou getClaim("roles")
+        if (roles == null) return List.of();
 
         return roles.stream()
-                .map(r -> (GrantedAuthority) new SimpleGrantedAuthority(r))
-                .toList();
+                .map(role -> role.startsWith("ROLE_") ? role : "ROLE_" + role)
+                .map(SimpleGrantedAuthority::new)
+                .collect(Collectors.toCollection(ArrayList::new));
 
     }
 }
-
