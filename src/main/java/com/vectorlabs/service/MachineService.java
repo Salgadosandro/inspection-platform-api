@@ -1,10 +1,9 @@
 package com.vectorlabs.service;
 
-
-import com.vectorlabs.exception.DoubleRegisterException;
-import com.vectorlabs.exception.ObjectNotFound;
 import com.vectorlabs.dto.machine.SearchMachineDTO;
 import com.vectorlabs.dto.machine.UpdateMachineDTO;
+import com.vectorlabs.exception.DoubleRegisterException;
+import com.vectorlabs.exception.ObjectNotFound;
 import com.vectorlabs.mapper.MachineMapper;
 import com.vectorlabs.model.Machine;
 import com.vectorlabs.repository.MachineRepository;
@@ -30,48 +29,43 @@ public class MachineService {
     // ------------------- CREATE -------------------
     @Transactional
     public Machine save(Machine entity) {
-        // Normalização pós-mapper (o mapper já normaliza, mas garantimos aqui)
         normalize(entity);
 
-        // Regras de negócio/segurança
         validator.validateCreation(entity);
 
-        // Checagem de duplicidade (type + manufacturer + model)
         if (repository.existsByTypeIgnoreCaseAndManufacturerIgnoreCaseAndModelIgnoreCase(
-                safe(entity.getType()), safe(entity.getManufacturer()), safe(entity.getModel()))) {
-            throw new DoubleRegisterException("A machine with the same type, manufacturer and model already exists.");
+                safe(entity.getType()),
+                safe(entity.getManufacturer()),
+                safe(entity.getModel()))) {
+            throw new DoubleRegisterException(
+                    "A machine with the same type, manufacturer and model already exists."
+            );
         }
 
         return repository.save(entity);
     }
 
+    // ------------------- UPDATE -------------------
     @Transactional
     public Machine update(UUID id, UpdateMachineDTO dto) {
         Machine before = repository.findById(id)
                 .orElseThrow(() -> new ObjectNotFound("Machine not found."));
 
-        // Validação de atualização (antes de aplicar mudanças)
         validator.validateUpdate(before, dto);
 
-        // Aplica alterações in-place
         mapper.updateEntity(before, dto);
         normalize(before);
 
-        // Checagem de duplicidade se campos chave mudaram
-        if (repository.existsByTypeIgnoreCaseAndManufacturerIgnoreCaseAndModelIgnoreCase(
-                safe(before.getType()), safe(before.getManufacturer()), safe(before.getModel()))) {
-            // Se existe outro registro com a mesma combinação, impedir
-            // (permite o próprio registro manter a combinação original)
-            boolean isSameRecord = repository.findById(before.getId())
-                    .map(m -> equalsIgnoreCase(m.getType(), before.getType())
-                            && equalsIgnoreCase(safe(m.getManufacturer()), safe(before.getManufacturer()))
-                            && equalsIgnoreCase(m.getModel(), before.getModel()))
-                    .orElse(false);
-
-            if (!isSameRecord) {
-                throw new DoubleRegisterException("A machine with the same type, manufacturer and model already exists.");
-            }
+        if (repository.existsByTypeIgnoreCaseAndManufacturerIgnoreCaseAndModelIgnoreCaseAndIdNot(
+                safe(before.getType()),
+                safe(before.getManufacturer()),
+                safe(before.getModel()),
+                before.getId())) {
+            throw new DoubleRegisterException(
+                    "A machine with the same type, manufacturer and model already exists."
+            );
         }
+
         return repository.save(before);
     }
 
@@ -93,7 +87,7 @@ public class MachineService {
         repository.delete(entity);
     }
 
-    // ------------------- SEARCH (paginação + filtros) -------------------
+    // ------------------- SEARCH -------------------
     @Transactional(readOnly = true)
     public Page<Machine> search(SearchMachineDTO filters, Integer page, Integer pageSize) {
         int p  = (page == null || page < 0) ? 0 : page;
@@ -103,7 +97,7 @@ public class MachineService {
         return repository.findAll(spec, PageRequest.of(p, ps));
     }
 
-    /** Normaliza e aplica limites de tamanho compatíveis com as colunas */
+    // ------------------- HELPERS -------------------
     private void normalize(Machine m) {
         if (m == null) return;
         m.setType(clean(m.getType(), 128));
@@ -119,11 +113,5 @@ public class MachineService {
 
     private String safe(String v) {
         return v == null ? "" : v;
-    }
-
-    private boolean equalsIgnoreCase(String a, String b) {
-        if (a == null && b == null) return true;
-        if (a == null || b == null) return false;
-        return a.equalsIgnoreCase(b);
     }
 }
