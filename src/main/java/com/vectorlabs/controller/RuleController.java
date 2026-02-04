@@ -17,7 +17,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
-@Hidden
 @RestController
 @RequestMapping("/api/rules")
 @RequiredArgsConstructor
@@ -33,6 +32,8 @@ public class RuleController implements GenericController {
         Rule entity = mapper.fromRegisterDTO(dto);
         Rule saved = service.save(entity);
         AnswerRuleDTO out = mapper.toDTO(saved);
+
+
         return ResponseEntity.created(generateHeaderLocation(saved.getId())).body(out);
     }
 
@@ -85,4 +86,7 @@ public class RuleController implements GenericController {
         service.softDelete(id);
         return ResponseEntity.noContent().build();
     }
+
+
+
 }

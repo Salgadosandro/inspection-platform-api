@@ -108,4 +108,14 @@ public class SecurityConfiguration {
 
         return http.build();
     }
+
+    @Bean
+    @Order(99)
+    public SecurityFilterChain fallbackChain(HttpSecurity http) throws Exception {
+        http
+                .csrf(csrf -> csrf.disable())
+                .authorizeHttpRequests(auth -> auth.anyRequest().denyAll());
+        return http.build();
+    }
+
 }

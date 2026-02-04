@@ -10,5 +10,5 @@ public interface RuleRepository extends JpaRepository<Rule, UUID>, JpaSpecificat
 
     boolean existsByCodeIgnoreCase(String code);
 
-    boolean existsByCodeIgnoreCaseAndIdNot(String code, UUID id);
+
 }
