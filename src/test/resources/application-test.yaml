@@ -1,0 +1,28 @@
+server:
+  port: 0
+
+spring:
+  datasource:
+    url: jdbc:h2:mem:vectorcheck_test;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  flyway:
+    enabled: false
+
+security:
+  jwt:
+    # 32+ bytes (base64). Exemplo: "my-super-secret-key-com-32-bytes" -> base64
+    secret: bXktc3VwZXItc2VjcmV0LWtleS1jb20tMzItYnl0ZXM=
+    issuer: vectorlabs
+    access-ttl-seconds: 3600
+    refresh-ttl-seconds: 1209600

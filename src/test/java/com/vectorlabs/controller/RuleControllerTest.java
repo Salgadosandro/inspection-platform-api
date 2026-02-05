@@ -1,337 +1,230 @@
 package com.vectorlabs.controller;
-import static org.mockito.Mockito.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-
-import java.util.UUID;
-
-import org.junit.jupiter.api.Test;
-import org.springframework.security.test.context.support.WithMockUser;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.vectorlabs.dto.rule.AnswerRuleDTO;
 import com.vectorlabs.dto.rule.RegisterRuleDTO;
 import com.vectorlabs.dto.rule.UpdateRuleDTO;
-import com.vectorlabs.mapper.RuleMapper;
 import com.vectorlabs.model.Rule;
-import com.vectorlabs.security.jwt.JwtAuthenticationFilter;
-import com.vectorlabs.security.jwt.JwtService;
-import com.vectorlabs.service.RuleService;
-import org.mockito.Mockito;
+import com.vectorlabs.repository.RuleRepository;
+import com.vectorlabs.security.jwt.JwtGrantedAuthoritiesConverter;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import java.time.LocalDate;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import java.util.List;
-import org.springframework.data.domain.*;
+import java.util.UUID;
+import static org.hamcrest.Matchers.containsString;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(RuleController.class)
-@AutoConfigureMockMvc(addFilters = false)
+@ActiveProfiles("test")
+@SpringBootTest
+@AutoConfigureMockMvc
 class RuleControllerTest {
 
-    @Autowired
-    private MockMvc mockMvc;
+    @Autowired MockMvc mockMvc;
+    @Autowired ObjectMapper objectMapper;
+    @Autowired RuleRepository ruleRepository;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+    @MockitoBean
+    JwtGrantedAuthoritiesConverter jwtGrantedAuthoritiesConverter;
 
-    // ===== Dependencies do controller =====
-    @MockBean
-    private RuleService ruleService;
-
-    @MockBean
-    private RuleMapper ruleMapper;
-
-    // ===== Se sua SecurityConfiguration referencia esses beans, mantenha =====
-    @MockBean
-    private JwtService jwtService;
-
-    @MockBean
-    private JwtAuthenticationFilter jwtAuthenticationFilter;
-
-    @Autowired
-    private org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping handlerMapping;
-
-    @Test
-    void debug_mappings() {
-        handlerMapping.getHandlerMethods().forEach((info, method) -> {
-            System.out.println(info + " -> " + method);
-        });
+    @BeforeEach
+    void setup() {
+        ruleRepository.deleteAll();
     }
 
+
     @Test
+    @WithMockUser(roles = "ADMIN")
     void shouldCreateRuleSuccessfully() throws Exception {
-        // DTO de entrada
         RegisterRuleDTO dto = new RegisterRuleDTO(
-                "NR12-001",
-                "Proteção de partes móveis",
-                "Descrição de teste",
+                "NR12",
+                "NR-12",
+                "Segurança no trabalho em máquinas e equipamentos",
                 "Portaria X",
-                java.time.LocalDate.parse("2022-12-20"),
-                true
-        );
-
-        // Entity que o mapper vai produzir
-        Rule toSave = new Rule();
-        toSave.setCode(dto.code());
-
-        // Entity "salva" que o service retorna
-        UUID id = UUID.randomUUID();
-        Rule saved = new Rule();
-        saved.setId(id);
-
-        AnswerRuleDTO out = new AnswerRuleDTO(
-                id,
-                "NR12-001",
-                "Proteção de partes móveis",
-                "Descrição de teste",
-                "Portaria X",
-                LocalDate.parse("2022-12-20"),
-                true,
-                false
-        );
-
-        // stubs IMPORTANTES (senão vira null e dá NPE)
-        when(ruleMapper.fromRegisterDTO(Mockito.any(RegisterRuleDTO.class))).thenReturn(toSave);
-        when(ruleService.save(Mockito.any(Rule.class))).thenReturn(saved);
-        when(ruleMapper.toDTO(Mockito.any(Rule.class))).thenReturn(out);
-
-        mockMvc.perform(
-                        post("/api/rules")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(dto))
-                )
-                .andExpect(status().isCreated()); // 201
-    }
-
-    @Test
-    void shouldReturn403WhenNotAuthenticatedOrNotAdmin() throws Exception {
-
-        RegisterRuleDTO inputDto = new RegisterRuleDTO(
-                "NR12-001",
-                "Proteção de partes móveis",
-                "Descrição de teste",
-                "Portaria X",
-                LocalDate.of(2022, 12, 20),
+                LocalDate.of(2024, 1, 1),
                 true
         );
 
         mockMvc.perform(post("/api/rules")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(inputDto)))
-                .andExpect(status().isForbidden());
+                        .content(objectMapper.writeValueAsString(dto)))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("Location", containsString("/api/rules/")))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.code").value("NR12"))
+                .andExpect(jsonPath("$.title").value("NR-12"))
+                .andExpect(jsonPath("$.active").value(true));
     }
 
     @Test
-    @WithMockUser(username = "admin", roles = {"ADMIN"})
-    void shouldGetRuleDetailsSuccessfully() throws Exception {
-        UUID id = UUID.randomUUID();
-
-        // entidade retornada pelo service
-        Rule found = new Rule();
-        found.setId(id);
-
-        // DTO retornado pelo mapper (record = 8 args)
-        AnswerRuleDTO out = new AnswerRuleDTO(
-                id,
-                "NR12-001",
-                "Título",
-                "Descrição",
-                "Portaria MTP nº 4.219, de 20/12/2022",
-                LocalDate.of(2022, 12, 20),
-                true,
-                false
+    @WithMockUser(roles = "USER")
+    void shouldReturnForbiddenOnCreateWhenNotAdmin() throws Exception {
+        RegisterRuleDTO dto = new RegisterRuleDTO(
+                "NR12", "NR-12", "desc", "Portaria X", LocalDate.of(2024, 1, 1), true
         );
 
-        when(ruleService.findById(id)).thenReturn(found);
-        when(ruleMapper.toDTO(found)).thenReturn(out);
+        mockMvc.perform(post("/api/rules")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(dto)))
+                .andExpect(status().isForbidden());
+    }
 
-        mockMvc.perform(get("/api/rules/{id}", id)
-                        .accept(MediaType.APPLICATION_JSON))
+    // ------------------- DETAILS -------------------
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void shouldGetDetailsSuccessfully() throws Exception {
+        Rule saved = new Rule();
+        saved.setCode("NR13");
+        saved.setTitle("NR-13");
+        saved.setDescription("Caldeiras e vasos de pressão");
+        saved.setActive(true);
+        saved.setDeleted(false);
+        saved = ruleRepository.save(saved);
+
+        mockMvc.perform(get("/api/rules/{id}", saved.getId()))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.id").value(id.toString()))
-                .andExpect(jsonPath("$.code").value("NR12-001"))
-                .andExpect(jsonPath("$.title").value("Título"))
-                .andExpect(jsonPath("$.active").value(true))
-                .andExpect(jsonPath("$.deleted").value(false));
-
-        verify(ruleService).findById(id);
-        verify(ruleMapper).toDTO(found);
-        verifyNoMoreInteractions(ruleService, ruleMapper);
+                .andExpect(jsonPath("$.id").value(saved.getId().toString()))
+                .andExpect(jsonPath("$.code").value("NR13"))
+                .andExpect(jsonPath("$.title").value("NR-13"));
     }
+
+    @Test
+    @WithMockUser(roles = "USER")
+    void shouldReturnForbiddenOnDetailsWhenNotAdmin() throws Exception {
+        mockMvc.perform(get("/api/rules/{id}", UUID.randomUUID()))
+                .andExpect(status().isForbidden());
+    }
+
+    // ------------------- GET ALL (SEARCH) -------------------
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void shouldGetAllSuccessfully() throws Exception {
+        Rule r1 = new Rule();
+        r1.setCode("NR10");
+        r1.setTitle("NR-10");
+        r1.setDescription("Eletricidade");
+        r1.setActive(true);
+        r1.setDeleted(false);
+
+        Rule r2 = new Rule();
+        r2.setCode("NR12");
+        r2.setTitle("NR-12");
+        r2.setDescription("Máquinas");
+        r2.setActive(true);
+        r2.setDeleted(false);
+
+        ruleRepository.saveAll(List.of(r1, r2));
+
+        // sem filtros: só verifica estrutura e que vem algo
+        mockMvc.perform(get("/api/rules")
+                        .param("page", "0")
+                        .param("page_size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.content.length()").value(2));
+    }
+
+    @Test
+    @WithMockUser(roles = "USER")
+    void shouldReturnForbiddenOnGetAllWhenNotAdmin() throws Exception {
+        mockMvc.perform(get("/api/rules"))
+                .andExpect(status().isForbidden());
+    }
+
+    // ------------------- UPDATE -------------------
 
     @Test
     @WithMockUser(roles = "ADMIN")
     void shouldUpdateRuleSuccessfully() throws Exception {
-        UUID id = UUID.randomUUID();
+        Rule saved = new Rule();
+        saved.setCode("NR12");
+        saved.setTitle("NR-12");
+        saved.setDescription("Old");
+        saved.setActive(true);
+        saved.setDeleted(false);
+        saved = ruleRepository.save(saved);
 
         UpdateRuleDTO dto = new UpdateRuleDTO(
-                "Novo título",
+                "NR-12 Atualizada",
                 "Nova descrição",
-                "Portaria MTP nº 4.219, de 20/12/2022",
-                LocalDate.of(2022, 12, 20),
-                true
-        );
-
-        AnswerRuleDTO out = new AnswerRuleDTO(
-                id,
-                "NR12-001",
-                "Novo título",
-                "Nova descrição",
-                "Portaria MTP nº 4.219, de 20/12/2022",
-                LocalDate.of(2022, 12, 20),
-                true,
+                "Portaria Y",
+                LocalDate.of(2025, 1, 1),
                 false
         );
 
-        when(ruleService.update(eq(id), any(UpdateRuleDTO.class))).thenReturn(out);
 
-        mockMvc.perform(
-                        put("/api/rules/{id}", id)
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(dto))
-                )
+        mockMvc.perform(put("/api/rules/{id}", saved.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(dto)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(id.toString()))
-                .andExpect(jsonPath("$.title").value("Novo título"))
-                .andExpect(jsonPath("$.description").value("Nova descrição"))
-                .andExpect(jsonPath("$.active").value(true))
-                .andExpect(jsonPath("$.deleted").value(false));
-
-        verify(ruleService).update(eq(id), any(UpdateRuleDTO.class));
-        verifyNoMoreInteractions(ruleService);
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.id").value(saved.getId().toString()))
+                .andExpect(jsonPath("$.title").value("NR-12 Atualizada"))
+                .andExpect(jsonPath("$.active").value(false));
     }
 
     @Test
-    @WithMockUser(roles = "ADMIN")
-    void shouldDeleteRuleSuccessfully() throws Exception {
-        UUID id = UUID.randomUUID();
+    @WithMockUser(roles = "USER")
+    void shouldReturnForbiddenOnUpdateWhenNotAdmin() throws Exception {
+        UpdateRuleDTO dto = new UpdateRuleDTO(
+                "X",
+                "Y",
+                "Portaria",
+                LocalDate.of(2025, 1, 1),
+                true
+        );
 
-        doNothing().when(ruleService).softDelete(id);
+
+        mockMvc.perform(put("/api/rules/{id}", UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(dto)))
+                .andExpect(status().isForbidden());
+    }
+
+    // ------------------- DELETE (SOFT DELETE) -------------------
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void shouldSoftDeleteRuleSuccessfully() throws Exception {
+        Rule saved = new Rule();
+        saved.setCode("NR20");
+        saved.setTitle("NR-20");
+        saved.setActive(true);
+        saved.setDeleted(false);
+        saved = ruleRepository.save(saved);
+
+        UUID id = saved.getId();
 
         mockMvc.perform(delete("/api/rules/{id}", id))
                 .andExpect(status().isNoContent());
 
-        verify(ruleService).softDelete(id);
-        verifyNoMoreInteractions(ruleService);
+        // garante que ainda existe (soft delete) OU que foi marcado como deleted.
+        // Ajuste aqui conforme sua implementação.
+        Rule after = ruleRepository.findById(id).orElseThrow();
+
+        // Se o softDelete marca deleted=true:
+        assertTrue(after.getDeleted(), "Esperava deleted=true após softDelete");
+        // se também desativa:
+        // assertFalse(after.isActive());
     }
 
     @Test
-    @WithMockUser(roles = "ADMIN")
-    void shouldGetAllRulesSuccessfully_withFilters() throws Exception {
-        // params
-        String code = "NR12";
-        String title = "Segurança";
-        String description = "máquina";
-        Boolean active = true;
-        Boolean deleted = false;
-        Integer page = 0;
-        Integer pageSize = 10;
-
-        // page mock
-        AnswerRuleDTO dto1 = new AnswerRuleDTO(
-                UUID.randomUUID(),
-                "NR12-001",
-                "Segurança em Prensas",
-                "Checklist de prensas",
-                "Portaria MTP nº 4.219, de 20/12/2022",
-                LocalDate.of(2022, 12, 20),
-                true,
-                false
-        );
-        AnswerRuleDTO dto2 = new AnswerRuleDTO(
-                UUID.randomUUID(),
-                "NR12-002",
-                "Segurança em Tornos",
-                "Checklist de tornos",
-                null,
-                null,
-                true,
-                false
-        );
-
-        Pageable pageable = PageRequest.of(page, pageSize, Sort.by("code").ascending());
-        Page<AnswerRuleDTO> resultPage = new PageImpl<>(List.of(dto1, dto2), pageable, 2);
-
-        when(ruleService.search(
-                eq(code),
-                eq(title),
-                eq(description),
-                eq(active),
-                eq(deleted),
-                eq(page),
-                eq(pageSize)
-        )).thenReturn(resultPage);
-
-        mockMvc.perform(
-                        get("/api/rules")
-                                .param("code", code)
-                                .param("title", title)
-                                .param("description", description)
-                                .param("active", String.valueOf(active))
-                                .param("deleted", String.valueOf(deleted))
-                                .param("page", String.valueOf(page))
-                                .param("page_size", String.valueOf(pageSize))
-                                .accept(MediaType.APPLICATION_JSON)
-                )
-                .andExpect(status().isOk())
-                // Spring Page JSON
-                .andExpect(jsonPath("$.content.length()").value(2))
-                .andExpect(jsonPath("$.totalElements").value(2))
-                .andExpect(jsonPath("$.totalPages").value(1))
-                .andExpect(jsonPath("$.number").value(0))
-                .andExpect(jsonPath("$.size").value(10))
-                // itens
-                .andExpect(jsonPath("$.content[0].code").value("NR12-001"))
-                .andExpect(jsonPath("$.content[0].title").value("Segurança em Prensas"))
-                .andExpect(jsonPath("$.content[0].active").value(true))
-                .andExpect(jsonPath("$.content[0].deleted").value(false))
-                .andExpect(jsonPath("$.content[1].code").value("NR12-002"));
-
-        verify(ruleService).search(
-                eq(code),
-                eq(title),
-                eq(description),
-                eq(active),
-                eq(deleted),
-                eq(page),
-                eq(pageSize)
-        );
-        verifyNoMoreInteractions(ruleService);
-    }
-
-    @Test
-    @WithMockUser(roles = "ADMIN")
-    void shouldGetAllRulesSuccessfully_withDefaults() throws Exception {
-        // quando não manda page/page_size, o controller manda 0 e 10
-        Page<AnswerRuleDTO> empty = Page.empty(PageRequest.of(0, 10, Sort.by("code").ascending()));
-
-        when(ruleService.search(
-                isNull(), isNull(), isNull(),
-                isNull(), isNull(),
-                eq(0), eq(10)
-        )).thenReturn(empty);
-
-        mockMvc.perform(get("/api/rules"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content.length()").value(0))
-                .andExpect(jsonPath("$.totalElements").value(0));
-
-        verify(ruleService).search(
-                isNull(), isNull(), isNull(),
-                isNull(), isNull(),
-                eq(0), eq(10)
-        );
-        verifyNoMoreInteractions(ruleService);
+    @WithMockUser(roles = "USER")
+    void shouldReturnForbiddenOnDeleteWhenNotAdmin() throws Exception {
+        mockMvc.perform(delete("/api/rules/{id}", UUID.randomUUID()))
+                .andExpect(status().isForbidden());
     }
 }

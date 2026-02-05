@@ -24,7 +24,7 @@ public abstract class RuleItemMapper {
     protected RuleItemRepository ruleItemRepository;
 
     // --------- CREATE ---------
-
+    @Mapping(source = "itemSequence", target = "sequence")
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "module", source = "moduleId", qualifiedByName = "mapModule")
     @Mapping(target = "parent", source = "parentId", qualifiedByName = "mapParent")
@@ -33,6 +33,7 @@ public abstract class RuleItemMapper {
 
     // --------- UPDATE (PATCH) ---------
 
+    @Mapping(source = "itemSequence", target = "sequence")
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "module", ignore = true) // immutable
@@ -40,7 +41,7 @@ public abstract class RuleItemMapper {
     public abstract void updateFromDTO(UpdateRuleItemDTO dto, @MappingTarget RuleItem entity);
 
     // --------- ANSWER ---------
-
+    @Mapping(source = "sequence", target = "itemSequence")
     @Mapping(target = "moduleId", source = "module.id")
     @Mapping(target = "moduleCode", source = "module.moduleCode")
     @Mapping(target = "parentId", source = "parent.id")

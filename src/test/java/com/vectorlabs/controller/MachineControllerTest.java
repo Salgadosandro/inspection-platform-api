@@ -1,188 +1,211 @@
 package com.vectorlabs.controller;
 
-import static org.junit.jupiter.api.Assertions.*;
-import com.vectorlabs.dto.machine.AnswerMachineDTO;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vectorlabs.dto.machine.RegisterMachineDTO;
-import com.vectorlabs.dto.machine.SearchMachineDTO;
 import com.vectorlabs.dto.machine.UpdateMachineDTO;
-import com.vectorlabs.mapper.MachineMapper;
 import com.vectorlabs.model.Machine;
-import com.vectorlabs.service.MachineService;
-import org.junit.jupiter.api.AfterEach;
+import com.vectorlabs.repository.MachineRepository;
+import com.vectorlabs.security.jwt.JwtGrantedAuthoritiesConverter;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.http.ResponseEntity;
-import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
-import java.net.URI;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+
 import java.util.List;
 import java.util.UUID;
-import static org.mockito.Mockito.*;
 
-@ExtendWith(MockitoExtension.class)
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.hasSize;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+@ActiveProfiles("test")
+@SpringBootTest
+@AutoConfigureMockMvc
 class MachineControllerTest {
 
-    @Mock
-    private MachineService service;
+    @Autowired MockMvc mockMvc;
+    @Autowired ObjectMapper objectMapper;
+    @Autowired MachineRepository machineRepository;
 
-    @Mock
-    private MachineMapper mapper;
+    // Mantém se sua SecurityConfiguration precisa desse bean no contexto de teste
+    @MockitoBean
+    JwtGrantedAuthoritiesConverter jwtGrantedAuthoritiesConverter;
 
-    @InjectMocks
-    private MachineController controller;
+    @BeforeEach
+    void setup() {
+        machineRepository.deleteAll();
+    }
 
-    @AfterEach
-    void tearDown() {
-        RequestContextHolder.resetRequestAttributes();
+    // ------------------- CREATE -------------------
+
+    @Test
+    void shouldReturnForbiddenOnCreateWhenNotAuthenticated() throws Exception {
+        RegisterMachineDTO dto = new RegisterMachineDTO(
+                "Compressor",
+                "Atlas Copco",
+                "GA 37"
+        );
+
+        mockMvc.perform(post("/api/machines")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(dto)))
+                .andExpect(status().isForbidden());
     }
 
     @Test
-    void create_shouldReturn201Created_withLocationHeaderAndBody() {
-        // Arrange: precisa de request context por causa do ServletUriComponentsBuilder.fromCurrentRequest()
-        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/machines");
-        request.setServerName("localhost");
-        request.setServerPort(8080);
-        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+    @WithMockUser
+    void shouldCreateMachineSuccessfully() throws Exception {
+        RegisterMachineDTO dto = new RegisterMachineDTO(
+                "Compressor",
+                "Atlas Copco",
+                "GA 37"
+        );
 
-        UUID id = UUID.randomUUID();
+        mockMvc.perform(post("/api/machines")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(dto)))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("Location", containsString("/api/machines/")))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.type").value("Compressor"))
+                .andExpect(jsonPath("$.manufacturer").value("Atlas Copco"))
+                .andExpect(jsonPath("$.model").value("GA 37"));
+    }
 
-        RegisterMachineDTO inDto = mock(RegisterMachineDTO.class);
+    // ------------------- DETAILS -------------------
 
-        Machine entity = new Machine();
+    @Test
+    void shouldReturnForbiddenOnDetailsWhenNotAuthenticated() throws Exception {
+        mockMvc.perform(get("/api/machines/{id}", UUID.randomUUID()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser
+    void shouldGetDetailsSuccessfully() throws Exception {
         Machine saved = new Machine();
-        // se Machine tiver setId(UUID), descomente:
-        // saved.setId(id);
+        saved.setType("Bomba");
+        saved.setManufacturer("KSB");
+        saved.setModel("Etanorm");
+        saved = machineRepository.save(saved);
 
-        // Como não sabemos se Machine tem setter, garantimos via spy/mock também:
-        // (mas vamos assumir que getId() existe e retorna o id)
-        saved = spy(saved);
-        doReturn(id).when(saved).getId();
+        mockMvc.perform(get("/api/machines/{id}", saved.getId()))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.id").value(saved.getId().toString()))
+                .andExpect(jsonPath("$.type").value("Bomba"))
+                .andExpect(jsonPath("$.manufacturer").value("KSB"))
+                .andExpect(jsonPath("$.model").value("Etanorm"));
+    }
 
-        AnswerMachineDTO outDto = mock(AnswerMachineDTO.class);
+    // ------------------- LIST (SEARCH) -------------------
 
-        when(mapper.toEntity(inDto)).thenReturn(entity);
-        when(service.save(entity)).thenReturn(saved);
-        when(mapper.toDTO(saved)).thenReturn(outDto);
-
-        // Act
-        ResponseEntity<AnswerMachineDTO> response = controller.create(inDto);
-
-        // Assert
-        assertEquals(201, response.getStatusCodeValue());
-        assertSame(outDto, response.getBody());
-
-        URI location = response.getHeaders().getLocation();
-        assertNotNull(location);
-        assertTrue(location.toString().endsWith("/api/machines/" + id));
-
-        verify(mapper).toEntity(inDto);
-        verify(service).save(entity);
-        verify(mapper).toDTO(saved);
-        verifyNoMoreInteractions(service, mapper);
+    @Test
+    void shouldReturnForbiddenOnListWhenNotAuthenticated() throws Exception {
+        mockMvc.perform(get("/api/machines"))
+                .andExpect(status().isForbidden());
     }
 
     @Test
-    void update_shouldReturn200Ok_withMappedBody() {
-        // Arrange
-        UUID id = UUID.randomUUID();
-        UpdateMachineDTO inDto = mock(UpdateMachineDTO.class);
+    @WithMockUser
+    void shouldListMachinesSuccessfully_withFilters() throws Exception {
+        Machine a = new Machine();
+        a.setType("Compressor");
+        a.setManufacturer("Atlas Copco");
+        a.setModel("GA 37");
 
-        Machine updated = new Machine();
-        AnswerMachineDTO outDto = mock(AnswerMachineDTO.class);
+        Machine b = new Machine();
+        b.setType("Compressor");
+        b.setManufacturer("Atlas Copco");
+        b.setModel("GA 55");
 
-        when(service.update(id, inDto)).thenReturn(updated);
-        when(mapper.toDTO(updated)).thenReturn(outDto);
+        machineRepository.saveAll(List.of(a, b));
 
-        // Act
-        ResponseEntity<AnswerMachineDTO> response = controller.update(id, inDto);
+        // Ajuste os nomes dos params conforme seus campos em SearchMachineDTO
+        // (por padrão, @ModelAttribute usa o nome do atributo do DTO)
+        mockMvc.perform(get("/api/machines")
+                        .param("type", "Compressor")
+                        .param("manufacturer", "Atlas Copco")
+                        .param("page", "0")
+                        .param("page_size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.content", hasSize(2)));
+    }
 
-        // Assert
-        assertEquals(200, response.getStatusCodeValue());
-        assertSame(outDto, response.getBody());
+    // ------------------- UPDATE -------------------
 
-        verify(service).update(id, inDto);
-        verify(mapper).toDTO(updated);
-        verifyNoMoreInteractions(service, mapper);
+    @Test
+    void shouldReturnForbiddenOnUpdateWhenNotAuthenticated() throws Exception {
+        UpdateMachineDTO dto = new UpdateMachineDTO(
+                "Compressor",
+                "Atlas Copco",
+                "GA 75"
+        );
+
+        mockMvc.perform(put("/api/machines/{id}", UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(dto)))
+                .andExpect(status().isForbidden());
     }
 
     @Test
-    void details_shouldReturn200Ok_withMappedBody() {
-        // Arrange
-        UUID id = UUID.randomUUID();
-        Machine entity = new Machine();
-        AnswerMachineDTO outDto = mock(AnswerMachineDTO.class);
+    @WithMockUser
+    void shouldUpdateMachineSuccessfully() throws Exception {
+        Machine saved = new Machine();
+        saved.setType("Compressor");
+        saved.setManufacturer("Atlas Copco");
+        saved.setModel("GA 37");
+        saved = machineRepository.save(saved);
 
-        when(service.findById(id)).thenReturn(entity);
-        when(mapper.toDTO(entity)).thenReturn(outDto);
+        UpdateMachineDTO dto = new UpdateMachineDTO(
+                "Compressor",
+                "Atlas Copco",
+                "GA 75"
+        );
 
-        // Act
-        ResponseEntity<AnswerMachineDTO> response = controller.details(id);
+        mockMvc.perform(put("/api/machines/{id}", saved.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(dto)))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.id").value(saved.getId().toString()))
+                .andExpect(jsonPath("$.type").value("Compressor"))
+                .andExpect(jsonPath("$.manufacturer").value("Atlas Copco"))
+                .andExpect(jsonPath("$.model").value("GA 75"));
+    }
 
-        // Assert
-        assertEquals(200, response.getStatusCodeValue());
-        assertSame(outDto, response.getBody());
+    // ------------------- DELETE -------------------
 
-        verify(service).findById(id);
-        verify(mapper).toDTO(entity);
-        verifyNoMoreInteractions(service, mapper);
+    @Test
+    void shouldReturnForbiddenOnDeleteWhenNotAuthenticated() throws Exception {
+        mockMvc.perform(delete("/api/machines/{id}", UUID.randomUUID()))
+                .andExpect(status().isForbidden());
     }
 
     @Test
-    void delete_shouldReturn204NoContent() {
-        // Arrange
-        UUID id = UUID.randomUUID();
-        doNothing().when(service).deleteById(id);
+    @WithMockUser
+    void shouldDeleteMachineSuccessfully() throws Exception {
+        Machine saved = new Machine();
+        saved.setType("Motor");
+        saved.setManufacturer("WEG");
+        saved.setModel("W22");
+        saved = machineRepository.save(saved);
 
-        // Act
-        ResponseEntity<Void> response = controller.delete(id);
+        UUID id = saved.getId();
 
-        // Assert
-        assertEquals(204, response.getStatusCodeValue());
-        assertNull(response.getBody());
+        mockMvc.perform(delete("/api/machines/{id}", id))
+                .andExpect(status().isNoContent());
 
-        verify(service).deleteById(id);
-        verifyNoMoreInteractions(service, mapper);
-        verifyNoInteractions(mapper);
-    }
-
-    @Test
-    void list_shouldReturn200Ok_withMappedPage() {
-        // Arrange
-        SearchMachineDTO filters = mock(SearchMachineDTO.class);
-        int page = 0;
-        int pageSize = 10;
-
-        Machine m1 = new Machine();
-        Machine m2 = new Machine();
-        Page<Machine> pageResult = new PageImpl<>(List.of(m1, m2)); // totalElements = 2
-
-        AnswerMachineDTO d1 = mock(AnswerMachineDTO.class);
-        AnswerMachineDTO d2 = mock(AnswerMachineDTO.class);
-
-        when(service.search(filters, page, pageSize)).thenReturn(pageResult);
-        when(mapper.toDTO(m1)).thenReturn(d1);
-        when(mapper.toDTO(m2)).thenReturn(d2);
-
-        // Act
-        ResponseEntity<Page<AnswerMachineDTO>> response = controller.list(filters, page, pageSize);
-
-        // Assert
-        assertEquals(200, response.getStatusCodeValue());
-        assertNotNull(response.getBody());
-        assertEquals(2, response.getBody().getTotalElements());
-        assertEquals(2, response.getBody().getContent().size());
-        assertSame(d1, response.getBody().getContent().get(0));
-        assertSame(d2, response.getBody().getContent().get(1));
-
-        verify(service).search(filters, page, pageSize);
-        verify(mapper).toDTO(m1);
-        verify(mapper).toDTO(m2);
-        verifyNoMoreInteractions(service, mapper);
+        assertFalse(machineRepository.findById(id).isPresent(),
+                "Esperava que o registro fosse removido do banco");
     }
 }

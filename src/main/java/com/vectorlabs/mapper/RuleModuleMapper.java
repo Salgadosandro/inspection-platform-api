@@ -26,7 +26,6 @@ public interface RuleModuleMapper {
     // Service usa: mapper.updateFromDTO(dto, existing)
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(target = "id", ignore = true)
-    @Mapping(target = "section", source = "sectionId", qualifiedByName = "toRuleSection")
     void updateFromDTO(UpdateRuleModuleDTO dto, @MappingTarget RuleModule entity);
 
     @Named("toRuleSection")

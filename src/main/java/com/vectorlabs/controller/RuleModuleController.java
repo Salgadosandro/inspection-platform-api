@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
-@Hidden
+
 @RestController
 @RequestMapping("/api/rule-modules")
 @RequiredArgsConstructor

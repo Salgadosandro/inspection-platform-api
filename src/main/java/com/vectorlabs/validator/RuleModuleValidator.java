@@ -52,7 +52,6 @@ public class RuleModuleValidator {
         if (before == null) throw new MissingRequiredFieldException("RuleModule is required.");
         if (dto == null) throw new MissingRequiredFieldException("UpdateRuleModuleDTO is required.");
 
-        assertImmutableOnUpdate(dto);
 
         if (dto.moduleCode() != null) {
             if (!notBlank(dto.moduleCode())) throw new MissingRequiredFieldException("moduleCode cannot be blank.");
@@ -89,12 +88,6 @@ public class RuleModuleValidator {
         return s != null && !s.trim().isEmpty();
     }
 
-    private void assertImmutableOnUpdate(UpdateRuleModuleDTO dto) {
-        // regra: se você não quer mover módulo entre seções
-        if (dto.sectionId() != null) {
-            throw new MissingRequiredFieldException("Section cannot be changed after creation.");
-        }
-    }
 
     private void assertUniqueOnCreate(RuleModule entity) {
         UUID sectionId = entity.getSection().getId();

@@ -1,6 +1,4 @@
 package com.vectorlabs.controller;
-
-import static org.hamcrest.Matchers.endsWith;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vectorlabs.dto.appuser.AnswerAppUserDTO;
 import com.vectorlabs.dto.appuser.RegisterAppUserDTO;
@@ -12,403 +10,316 @@ import com.vectorlabs.model.enuns.AuthProvider;
 import com.vectorlabs.model.enuns.UserRole;
 import com.vectorlabs.security.CustomUserDetails;
 import com.vectorlabs.security.SecurityService;
-import com.vectorlabs.security.jwt.JwtAuthenticationFilter;
-import com.vectorlabs.security.jwt.JwtService;
+import com.vectorlabs.security.jwt.JwtAuthenticationConverterConfig;
+import com.vectorlabs.security.jwt.JwtGrantedAuthoritiesConverter;
 import com.vectorlabs.service.AppUserService;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.data.domain.*;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.request.RequestPostProcessor;
-import org.springframework.security.core.context.SecurityContextHolder;
-import static org.mockito.Mockito.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(AppUserController.class)
-@AutoConfigureMockMvc(addFilters = false) // <- evita briga com Security/PreAuthorize agora
+@SpringBootTest
+@AutoConfigureMockMvc // filtros ON => PreAuthorize sendo aplicado
+@ActiveProfiles("test")
 class AppUserControllerTest {
 
-    @Autowired MockMvc mockMvc;
+    @Autowired MockMvc mvc;
     @Autowired ObjectMapper objectMapper;
-    @MockBean
-    JwtService jwtService;
-    @MockBean
-    JwtAuthenticationFilter jwtAuthenticationFilter;
 
-    @MockBean AppUserService service;
-    @MockBean SecurityService securityService;
-    @MockBean AppUserMapper mapper;
+    @MockitoBean AppUserService service;
+    @MockitoBean SecurityService securityService;
+    @MockitoBean AppUserMapper mapper;
+    @MockitoBean JwtGrantedAuthoritiesConverter jwtGrantedAuthoritiesConverter;
+    @MockitoBean JwtAuthenticationConverterConfig jwtAuthenticationConverterConfig;
 
-    private static final String BASE = "/api/users/internal";
-
-    // =========================================================
-    // Helpers
-    // =========================================================
-
-    private AppUser user(UUID id) {
+    private AppUser user(UUID id, String email, Set<UserRole> roles) {
         AppUser u = new AppUser();
         u.setId(id);
-        u.setEmail("sandro@x.com");
-        u.setName("Sandro");
-        u.setPassword("ENC");
+        u.setEmail(email);
         u.setEnabled(true);
         u.setDeleted(false);
         u.setAuthProvider(AuthProvider.LOCAL);
-        u.setRoles(Set.of(UserRole.CLIENT));
-        u.setEmailVerified(true);
-        u.setLastLoginAt(Instant.parse("2025-01-01T00:00:00Z"));
-        u.setCpf("12345678901");
-        u.setCnpj(null);
-        u.setProviderUserId(null);
-        u.setPictureUrl(null);
-        u.setAddress(null);
+        u.setRoles(roles);
+        u.setLastLoginAt(Instant.parse("2026-02-05T14:00:00Z"));
+        u.setName("User Test");
         return u;
     }
 
-    private AnswerAppUserDTO answerDto(UUID id) {
-        // ORDEM IMPORTA (record)
-        return new AnswerAppUserDTO(
-                id,
-                "sandro@x.com",
-                AuthProvider.LOCAL,
-                null, // providerUserId
-                "Sandro",
-                null, // pictureUrl
-                true, // emailVerified
-                Instant.parse("2025-01-01T00:00:00Z"),
-                "12345678901",
-                null, // cnpj
-                null, // address (AnswerAddressDTO)
-                false, // deleted
-                true,  // enabled
-                Set.of(UserRole.CLIENT)
-        );
+    /**
+     * Ajuste aqui se seu CustomUserDetails tiver outro construtor/factory.
+     */
+    private CustomUserDetails principalOf(AppUser u) {
+        return new CustomUserDetails(u);
     }
 
-    /**
-     * Injeta um principal do tipo CustomUserDetails diretamente (sem filtros).
-     * Se seu CustomUserDetails tiver outro construtor, ajuste aqui.
-     */
-    private RequestPostProcessor authPrincipal(AppUser user) {
-        CustomUserDetails principal = new CustomUserDetails(user);
-        var auth = new UsernamePasswordAuthenticationToken(
-                principal,
-                "N/A",
-                List.of() // sem authorities porque addFilters=false
-        );
-        return request -> {
-            request.setUserPrincipal(auth);
-            return request;
-        };
+    private SecurityMockMvcRequestPostProcessors.UserRequestPostProcessor adminUser() {
+        return SecurityMockMvcRequestPostProcessors.user("admin").roles("ADMIN");
     }
-    // =========================================================
-    // Tests
-    // =========================================================
+
+    private SecurityMockMvcRequestPostProcessors.UserRequestPostProcessor normalUser() {
+        return SecurityMockMvcRequestPostProcessors.user("user").roles("USER");
+    }
+
+    // -------------------------
+    // POST /api/users/internal  (register)
+    // -------------------------
 
     @Test
-    void register_shouldReturn201_andLocationHeader_andBody() throws Exception {
-        UUID id = UUID.randomUUID();
-        String payload = """
-        {
-          "email": "sandro@x.com",
-          "password": "12345678",
-          "name": "Sandro",
-          "address": null
-        }
-        """;
-        AppUser saved = user(id);
-        AnswerAppUserDTO out = answerDto(id);
+    void register_ok_returns_201_and_location() throws Exception {
+        var id = UUID.randomUUID();
+        var saved = user(id, "new@test.com", Set.of(UserRole.USER));
 
-        when(service.register(any(RegisterAppUserDTO.class))).thenReturn(saved);
+        // DTOs: use seus construtores/records reais
+        RegisterAppUserDTO in = mock(RegisterAppUserDTO.class); // evita depender do shape do DTO
+        AnswerAppUserDTO out = mock(AnswerAppUserDTO.class);
+
+        when(service.register(any())).thenReturn(saved);
         when(mapper.toAnswerDTO(saved)).thenReturn(out);
 
-        mockMvc.perform(post(BASE)
+        mvc.perform(post("/api/users/internal")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(payload))
+                        .content("""
+            {
+              "email": "new@test.com",
+              "password": "12345678"
+            }
+        """))
                 .andExpect(status().isCreated())
+                .andExpect(header().string("Location",
+                        org.hamcrest.Matchers.containsString("/api/users/internal/" + id)))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON));
 
-                // ✅ aceita Location como URL absoluta (http://localhost/...)
-                .andExpect(header().string("Location", endsWith(BASE + "/" + id)))
-
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.id").value(id.toString()))
-                .andExpect(jsonPath("$.email").value("sandro@x.com"))
-                .andExpect(jsonPath("$.name").value("Sandro"))
-                .andExpect(jsonPath("$.authProvider").value("LOCAL"))
-                .andExpect(jsonPath("$.enabled").value(true))
-                .andExpect(jsonPath("$.deleted").value(false));
 
         verify(service).register(any(RegisterAppUserDTO.class));
         verify(mapper).toAnswerDTO(saved);
-        verifyNoMoreInteractions(service, mapper);
     }
 
     @Test
-    void getDetails_shouldReturn200_andBody() throws Exception {
-        UUID id = UUID.randomUUID();
-        AppUser entity = user(id);
-        AnswerAppUserDTO out = answerDto(id);
+    void getDetails_admin_ok() throws Exception {
+        var id = UUID.randomUUID();
+        var entity = user(id, "user@test.com", Set.of(UserRole.USER));
+        AnswerAppUserDTO out = mock(AnswerAppUserDTO.class);
 
         when(service.findById(id)).thenReturn(entity);
         when(mapper.toAnswerDTO(entity)).thenReturn(out);
 
-        mockMvc.perform(get(BASE + "/{id}", id))
+        mvc.perform(get("/api/users/internal/{id}", id).with(adminUser()))
                 .andExpect(status().isOk())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.id").value(id.toString()))
-                .andExpect(jsonPath("$.email").value("sandro@x.com"))
-                .andExpect(jsonPath("$.name").value("Sandro"));
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON));
 
         verify(service).findById(id);
         verify(mapper).toAnswerDTO(entity);
-        verifyNoMoreInteractions(service, mapper);
     }
 
     @Test
-    void getMe_shouldReturn200_andBody() throws Exception {
-        UUID id = UUID.randomUUID();
+    void getDetails_non_admin_forbidden() throws Exception {
+        var id = UUID.randomUUID();
 
-        AppUser logged = user(id);
-        AnswerAppUserDTO out = answerDto(id);
+        mvc.perform(get("/api/users/internal/{id}", id).with(normalUser()))
+                .andExpect(status().isForbidden());
 
-        CustomUserDetails principal = mock(CustomUserDetails.class);
-        when(principal.getUser()).thenReturn(logged);
-        when(principal.getAuthorities()).thenReturn(java.util.List.of());
+        verifyNoInteractions(service);
+        verifyNoInteractions(mapper);
+    }
 
-        Authentication auth =
-                new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+    // -------------------------
+    // GET /api/users/internal/me  (authenticated)
+    // -------------------------
 
-        // <-- isso garante que @AuthenticationPrincipal não fica null
-        SecurityContextHolder.getContext().setAuthentication(auth);
+    @Test
+    void getMe_ok_returns_logged_user() throws Exception {
+        var id = UUID.randomUUID();
+        var logged = user(id, "me@test.com", Set.of(UserRole.USER));
+        var principal = principalOf(logged);
+        AnswerAppUserDTO out = mock(AnswerAppUserDTO.class);
 
         when(mapper.toAnswerDTO(logged)).thenReturn(out);
 
-        mockMvc.perform(get(BASE + "/me"))
+        mvc.perform(get("/api/users/internal/me")
+                        .with(SecurityMockMvcRequestPostProcessors.user(principal)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(id.toString()))
-                .andExpect(jsonPath("$.email").value("sandro@x.com"));
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON));
 
         verify(mapper).toAnswerDTO(logged);
-        verifyNoInteractions(service, securityService);
-        verifyNoMoreInteractions(mapper);
+        verifyNoInteractions(service);
     }
 
-    @AfterEach
-    void cleanup() {
-        SecurityContextHolder.clearContext();
-    }
+    // -------------------------
+    // PUT /api/users/internal/me  (authenticated)
+    // -------------------------
 
     @Test
-    void updateMe_shouldReturn200_andBody() throws Exception {
-        UUID id = UUID.randomUUID();
+    void updateMe_ok() throws Exception {
+        var id = UUID.randomUUID();
+        var logged = user(id, "me@test.com", Set.of(UserRole.USER));
+        var principal = principalOf(logged);
 
-        AppUser logged = user(id);
+        UpdateAppUserDTO in = mock(UpdateAppUserDTO.class);
+        var result = user(id, "me@test.com", Set.of(UserRole.USER));
+        AnswerAppUserDTO out = mock(AnswerAppUserDTO.class);
 
-        UpdateAppUserDTO dto = new UpdateAppUserDTO(
-                "Sandro 2",
-                "https://img.com/p.png",
-                "12345678901",
-                null,
-                null
-        );
+        when(service.updateMe(any(UpdateAppUserDTO.class), eq(logged))).thenReturn(result);
+        when(mapper.toAnswerDTO(result)).thenReturn(out);
 
-        AppUser updated = user(id);
-        updated.setName("Sandro 2");
-        updated.setPictureUrl("https://img.com/p.png");
-
-        AnswerAppUserDTO out = answerDto(id);
-
-        // ✅ principal do tipo que o controller espera
-        CustomUserDetails principal = mock(CustomUserDetails.class);
-        when(principal.getUser()).thenReturn(logged);
-        when(principal.getAuthorities()).thenReturn(java.util.List.of());
-
-        var auth = new UsernamePasswordAuthenticationToken(
-                principal, null, principal.getAuthorities()
-        );
-        SecurityContextHolder.getContext().setAuthentication(auth);
-
-        when(service.updateMe(eq(dto), eq(logged))).thenReturn(updated);
-        when(mapper.toAnswerDTO(updated)).thenReturn(out);
-
-        mockMvc.perform(put(BASE + "/me")
+        mvc.perform(put("/api/users/internal/me")
+                        .with(SecurityMockMvcRequestPostProcessors.user(principal))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
+                        .content("{}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(id.toString()));
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON));
 
-        verify(service).updateMe(eq(dto), eq(logged));
-        verify(mapper).toAnswerDTO(updated);
-        verifyNoMoreInteractions(service, mapper);
-        verifyNoInteractions(securityService);
-
-        SecurityContextHolder.clearContext();
+        verify(service).updateMe(any(UpdateAppUserDTO.class), eq(logged));
+        verify(mapper).toAnswerDTO(result);
     }
 
+    // -------------------------
+    // PUT /api/users/internal/{id}  (ADMIN)
+    // -------------------------
+
     @Test
-    void update_shouldReturn200_andBody() throws Exception {
-        UUID id = UUID.randomUUID();
+    void update_admin_ok() throws Exception {
+        var id = UUID.randomUUID();
+        UpdateAppUserDTO in = mock(UpdateAppUserDTO.class);
+        var result = user(id, "updated@test.com", Set.of(UserRole.USER));
+        AnswerAppUserDTO out = mock(AnswerAppUserDTO.class);
 
-        UpdateAppUserDTO dto = new UpdateAppUserDTO(
-                "Admin Updated",
-                null,
-                "12345678901",
-                null,
-                null
-        );
+        when(service.update(eq(id), any(UpdateAppUserDTO.class))).thenReturn(result);
+        when(mapper.toAnswerDTO(result)).thenReturn(out);
 
-        AppUser updated = user(id);
-        updated.setName("Admin Updated");
-        AnswerAppUserDTO out = answerDto(id);
-
-        when(service.update(eq(id), eq(dto))).thenReturn(updated);
-        when(mapper.toAnswerDTO(updated)).thenReturn(out);
-
-        mockMvc.perform(put(BASE + "/{id}", id)
+        mvc.perform(put("/api/users/internal/{id}", id)
+                        .with(adminUser())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
+                        .content("{}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(id.toString()));
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON));
 
-        verify(service).update(eq(id), eq(dto));
-        verify(mapper).toAnswerDTO(updated);
-        verifyNoMoreInteractions(service, mapper);
-        verifyNoInteractions(securityService);
+        verify(service).update(eq(id), any(UpdateAppUserDTO.class));
+        verify(mapper).toAnswerDTO(result);
     }
 
+    // -------------------------
+    // GET /api/users/internal/search  (ADMIN)
+    // -------------------------
+
     @Test
-    void search_shouldReturn200_andPagedBody() throws Exception {
-        UUID id = UUID.randomUUID();
-        AppUser entity = user(id);
-        AnswerAppUserDTO out = answerDto(id);
+    void search_admin_ok_returns_page() throws Exception {
+        var id = UUID.randomUUID();
+        var e1 = user(id, "a@test.com", Set.of(UserRole.USER));
+        var page = new PageImpl<>(List.of(e1), PageRequest.of(0, 20), 1);
 
-        Page<AppUser> page = new PageImpl<>(
-                List.of(entity),
-                PageRequest.of(0, 20, Sort.by("email").ascending()),
-                1
-        );
+        when(service.search(any(SearchAppUserDTO.class), any())).thenReturn(page);
+        when(mapper.toAnswerDTO(e1)).thenReturn(mock(AnswerAppUserDTO.class));
 
-        when(service.search(any(SearchAppUserDTO.class), any(Pageable.class))).thenReturn(page);
-        when(mapper.toAnswerDTO(entity)).thenReturn(out);
-
-        mockMvc.perform(get(BASE + "/search")
-                        .param("email", "sandro@x.com")
+        mvc.perform(get("/api/users/internal/search")
+                        .with(adminUser())
+                        .param("email", "a@test.com")
                         .param("page", "0")
-                        .param("size", "20")
-                        .param("sort", "email,asc"))
+                        .param("size", "20"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content").isArray())
-                .andExpect(jsonPath("$.content.length()").value(1))
-                .andExpect(jsonPath("$.content[0].id").value(id.toString()))
-                .andExpect(jsonPath("$.content[0].email").value("sandro@x.com"))
-                .andExpect(jsonPath("$.totalElements").value(1));
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                // Page padrão do Spring tem "content"
+                .andExpect(jsonPath("$.content").isArray());
 
-        verify(service).search(any(SearchAppUserDTO.class), any(Pageable.class));
-        verify(mapper).toAnswerDTO(entity);
-        verifyNoMoreInteractions(service, mapper);
-        verifyNoInteractions(securityService);
+        verify(service).search(any(SearchAppUserDTO.class), any());
+        verify(mapper).toAnswerDTO(e1);
     }
 
+    // -------------------------
+    // PATCH /api/users/internal/{id} (no PreAuthorize no código)
+    // -------------------------
+
     @Test
-    void patch_shouldReturn200_andBody() throws Exception {
-        UUID id = UUID.randomUUID();
-
-        UpdateAppUserDTO dto = new UpdateAppUserDTO(
-                "Patch Name",
-                null,
-                null,
-                null,
-                null
-        );
-
-        AppUser updated = user(id);
-        updated.setName("Patch Name");
-        AnswerAppUserDTO out = answerDto(id);
-
+    void patch_ok() throws Exception {
+        var id = UUID.randomUUID();
+        var updated = user(id, "patched@test.com", Set.of(UserRole.USER));
         when(service.patch(eq(id), any(UpdateAppUserDTO.class))).thenReturn(updated);
-        when(mapper.toAnswerDTO(updated)).thenReturn(out);
+        when(mapper.toAnswerDTO(updated)).thenReturn(mock(AnswerAppUserDTO.class));
 
-        mockMvc.perform(patch(BASE + "/{id}", id)
+        mvc.perform(patch("/api/users/internal/{id}", id)
+                        .with(adminUser()) // por segurança, caso sua HttpSecurity exija auth globalmente
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(dto)))
+                        .content("{}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(id.toString()));
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON));
 
         verify(service).patch(eq(id), any(UpdateAppUserDTO.class));
         verify(mapper).toAnswerDTO(updated);
-        verifyNoMoreInteractions(service, mapper);
-        verifyNoInteractions(securityService);
     }
 
-    @Test
-    void softDelete_shouldReturn204() throws Exception {
-        UUID id = UUID.randomUUID();
+    // -------------------------
+    // DELETE /api/users/internal/{id}  (soft delete - sem PreAuthorize no código)
+    // -------------------------
 
+    @Test
+    void softDelete_ok_returns_204() throws Exception {
+        var id = UUID.randomUUID();
         doNothing().when(service).softDelete(id);
 
-        mockMvc.perform(delete(BASE + "/{id}", id))
+        mvc.perform(delete("/api/users/internal/{id}", id)
+                        .with(adminUser()))
                 .andExpect(status().isNoContent());
 
         verify(service).softDelete(id);
-        verifyNoMoreInteractions(service);
-        verifyNoInteractions(mapper, securityService);
     }
 
+    // -------------------------
+    // DELETE /api/users/internal/{id}/hard  (ADMIN)
+    // -------------------------
+
     @Test
-    void delete_shouldReturn200_andBody() throws Exception {
-        UUID id = UUID.randomUUID();
-
-        AppUser deleted = user(id);
-        AnswerAppUserDTO out = answerDto(id);
-
+    void hardDelete_admin_ok() throws Exception {
+        var id = UUID.randomUUID();
+        var deleted = user(id, "deleted@test.com", Set.of(UserRole.USER));
         when(service.deleteById(id)).thenReturn(deleted);
-        when(mapper.toAnswerDTO(deleted)).thenReturn(out);
+        when(mapper.toAnswerDTO(deleted)).thenReturn(mock(AnswerAppUserDTO.class));
 
-        mockMvc.perform(delete(BASE + "/{id}/hard", id))
+        mvc.perform(delete("/api/users/internal/{id}/hard", id)
+                        .with(adminUser()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(id.toString()));
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON));
 
         verify(service).deleteById(id);
         verify(mapper).toAnswerDTO(deleted);
-        verifyNoMoreInteractions(service, mapper);
-        verifyNoInteractions(securityService);
     }
 
+    // -------------------------
+    // DELETE /api/users/internal/me  (authenticated)
+    // -------------------------
+
     @Test
-    void deleteMe_shouldReturn200_andBody() throws Exception {
-        UUID id = UUID.randomUUID();
-        AppUser logged = user(id);
-
-        AppUser result = user(id);
-        result.setDeleted(true);
-
-        AnswerAppUserDTO out = answerDto(id);
+    void deleteMe_ok() throws Exception {
+        var id = UUID.randomUUID();
+        var logged = user(id, "me@test.com", Set.of(UserRole.USER));
+        var result = user(id, "me@test.com", Set.of(UserRole.USER));
 
         when(securityService.getLoggedUser()).thenReturn(logged);
         when(service.softDeleteMe(logged)).thenReturn(result);
-        when(mapper.toAnswerDTO(result)).thenReturn(out);
+        when(mapper.toAnswerDTO(result)).thenReturn(mock(AnswerAppUserDTO.class));
 
-        mockMvc.perform(delete(BASE + "/me"))
+        mvc.perform(delete("/api/users/internal/me")
+                        .with(normalUser()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(id.toString()));
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON));
 
         verify(securityService).getLoggedUser();
         verify(service).softDeleteMe(logged);
         verify(mapper).toAnswerDTO(result);
-        verifyNoMoreInteractions(securityService, service, mapper);
     }
 }

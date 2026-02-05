@@ -12,14 +12,12 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-
-import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -37,9 +35,10 @@ class AuthControllerTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper objectMapper;
 
-    @MockBean AuthenticationManager authenticationManager;
-    @MockBean AppUserRepository appUserRepository;
-    @MockBean JwtService jwtService;
+    @MockitoBean AuthenticationManager authenticationManager;
+    @MockitoBean AppUserRepository appUserRepository;
+    @MockitoBean
+    JwtService jwtService;
 
     private AppUser userOk(UUID id) {
         AppUser u = new AppUser();

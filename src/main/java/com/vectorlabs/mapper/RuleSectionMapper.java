@@ -1,5 +1,6 @@
 package com.vectorlabs.mapper;
 
+import com.vectorlabs.dto.rule.RegisterRuleDTO;
 import com.vectorlabs.dto.rule.ruledection.AnswerRuleSectionDTO;
 import com.vectorlabs.dto.rule.ruledection.RegisterRuleSectionDTO;
 import com.vectorlabs.dto.rule.ruledection.UpdateRuleSectionDTO;
@@ -17,6 +18,7 @@ public interface RuleSectionMapper {
     @Mapping(target = "rule", source = "ruleId", qualifiedByName = "toRule")
     @Mapping(target = "active", expression = "java(dto.active() == null ? Boolean.TRUE : dto.active())")
     RuleSection toEntity(RegisterRuleSectionDTO dto);
+
 
     // Service/Controller usam: mapper.toDTO(entity)
     @Mapping(target = "ruleId", source = "rule.id")
