@@ -67,7 +67,7 @@ public class OAuth2UserServiceImpl extends DefaultOAuth2UserService {
                 user.setProviderUserId(info.providerUserId());
             }
             // Se quiser impedir login de usuário deletado:
-            if (user.isDeleted() || !user.isEnabled()) {
+            if (user.getDeleted() || !user.isEnabled()) {
                 throw new OAuth2AuthenticationException("User disabled/deleted");
             }
         }

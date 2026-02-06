@@ -15,4 +15,14 @@ public interface GenericController {
                 .toUri();
     }
 
+    default URI locationOf(String resourcePath, UUID id) {
+        return ServletUriComponentsBuilder
+                .fromCurrentContextPath()
+                .path(resourcePath)
+                .path("/{id}")
+                .buildAndExpand(id)
+                .toUri();
+    }
+
+
 }

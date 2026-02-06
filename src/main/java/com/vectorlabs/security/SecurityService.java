@@ -5,11 +5,13 @@ import com.vectorlabs.model.AppUser;
 import com.vectorlabs.service.AppUserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 
+import java.util.Collection;
 import java.util.UUID;
 
 @Service
@@ -18,8 +20,11 @@ public class SecurityService {
 
     private final AppUserService appUserService;
 
+    // =================== USER ===================
+
     public AppUser getLoggedUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+
         if (auth == null) {
             throw new ObjectNotFound("No authentication");
         }
@@ -42,6 +47,26 @@ public class SecurityService {
         );
     }
 
+    // =================== ROLE ===================
+
+    public boolean isAdmin() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+
+        if (auth == null) {
+            return false;
+        }
+
+        Collection<? extends GrantedAuthority> authorities = auth.getAuthorities();
+
+        if (authorities == null || authorities.isEmpty()) {
+            return false;
+        }
+
+        return authorities.stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch(role ->
+                        role.equals("ROLE_ADMIN") ||
+                                role.equals("ADMIN")
+                );
+    }
 }
-
-

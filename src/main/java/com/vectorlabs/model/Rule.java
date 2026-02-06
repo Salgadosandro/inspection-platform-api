@@ -49,9 +49,4 @@ public class Rule extends Auditable {
     @Builder.Default
     @Column(name = "active", nullable = false)
     private Boolean active = true;
-
-    @Builder.Default
-    @Column(name = "deleted", nullable = false)
-    private Boolean deleted = false;
-
 }

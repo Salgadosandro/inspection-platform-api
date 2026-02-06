@@ -1,11 +1,13 @@
 package com.vectorlabs.validator;
 
+import com.vectorlabs.dto.clientcompany.RegisterClientCompanyAdminDTO;
+import com.vectorlabs.dto.clientcompany.RegisterClientCompanyDTO;
 import com.vectorlabs.dto.clientcompany.UpdateClientCompanyDTO;
-import com.vectorlabs.exception.ForbiddenAcessException;
 import com.vectorlabs.exception.InvalidFieldException;
+import com.vectorlabs.exception.MissingRequiredFieldException;
+import com.vectorlabs.exception.ObjectNotFound;
+import com.vectorlabs.model.AppUser;
 import com.vectorlabs.model.ClientCompany;
-import com.vectorlabs.repository.ClientCompanyRepository;
-import com.vectorlabs.security.SecurityService;
 import com.vectorlabs.service.AppUserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -15,95 +17,108 @@ import java.util.UUID;
 @Component
 @RequiredArgsConstructor
 public class ClientCompanyValidator {
+    private final AppUserService appUserService;
 
-    private final ClientCompanyRepository repository;
-    private final AppUserService userService;
-    private final SecurityService securityService;
-
-    // CREATE
-    public void validateCreation(ClientCompany entity) {
-        var user = securityService.getLoggedUser();
-
-        // owner / escopo
-        if (entity.getUserId() == null || !entity.getUserId().equals(user.getId())) {
-            throw new ForbiddenAcessException("ClientCompany does not belong to the authenticated user.");
+    public void validateCreate(RegisterClientCompanyDTO dto) {
+        if (dto == null) {
+            throw new MissingRequiredFieldException("ClientCompany payload cannot be null.");
         }
 
-        // campos obrigatórios
-        if (!notBlank(entity.getCorporateName())) {
-            throw new InvalidFieldException("corporateName is required.");
+        if (isBlank(dto.corporateName())) {
+            throw new MissingRequiredFieldException("Field 'corporateName' is required.");
         }
 
-        if (entity.getCorporateName().length() > 200) {
-            throw new InvalidFieldException("corporateName max length is 200.");
+        // endereço: decide se é obrigatório
+        if (dto.address() == null) {
+            throw new MissingRequiredFieldException("Field 'address' is required.");
         }
 
-        if (entity.getTradeName() != null && entity.getTradeName().length() > 200) {
-            throw new InvalidFieldException("tradeName max length is 200.");
+        // aqui você NÃO valida user (vem do securityService)
+    }
+
+    public void validateAdminCreate(RegisterClientCompanyAdminDTO dto) {
+        if (dto == null) {
+            throw new MissingRequiredFieldException("ClientCompany payload cannot be null.");
         }
 
-        if (entity.getCnpj() != null && entity.getCnpj().length() > 18) {
-            throw new InvalidFieldException("cnpj max length is 18.");
+        if (dto.userId() == null) {
+            throw new MissingRequiredFieldException("Field 'userId' is required for admin create.");
         }
 
-        if (entity.getPhone() != null && entity.getPhone().length() > 20) {
-            throw new InvalidFieldException("phone max length is 20.");
+        if (isBlank(dto.corporateName())) {
+            throw new MissingRequiredFieldException("Field 'corporateName' is required.");
         }
 
-        if (entity.getEmail() != null && entity.getEmail().length() > 150) {
-            throw new InvalidFieldException("email max length is 150.");
+        if (dto.address() == null) {
+            throw new MissingRequiredFieldException("Field 'address' is required.");
         }
     }
 
-    // UPDATE (PATCH)
-    public void validateUpdate(ClientCompany before, UpdateClientCompanyDTO dto) {
-        var user = securityService.getLoggedUser();
+    // =================== UPDATE ===================
 
-        // owner / escopo
-        assertOwnedByUser(before, user.getId());
-
-        // validar apenas campos presentes
-        if (dto.corporateName() != null) {
-            if (!notBlank(dto.corporateName())) {
-                throw new InvalidFieldException("corporateName cannot be blank.");
-            }
-            if (dto.corporateName().length() > 200) {
-                throw new InvalidFieldException("corporateName max length is 200.");
-            }
+    public void validateUpdate(UpdateClientCompanyDTO dto) {
+        if (dto == null) {
+            throw new MissingRequiredFieldException("Update payload cannot be null.");
         }
 
-        if (dto.tradeName() != null && dto.tradeName().length() > 200) {
-            throw new InvalidFieldException("tradeName max length is 200.");
-        }
-
-        if (dto.cnpj() != null && dto.cnpj().length() > 18) {
-            throw new InvalidFieldException("cnpj max length is 18.");
-        }
-
-        if (dto.phone() != null && dto.phone().length() > 20) {
-            throw new InvalidFieldException("phone max length is 20.");
-        }
-
-        if (dto.email() != null && dto.email().length() > 150) {
-            throw new InvalidFieldException("email max length is 150.");
+        // update é PATCH-like: tudo opcional
+        // mas se vier vazio demais, você pode bloquear (opcional)
+        if (
+                isBlank(dto.corporateName()) &&
+                        isBlank(dto.tradeName()) &&
+                        isBlank(dto.cnpj()) &&
+                        isBlank(dto.phone()) &&
+                        isBlank(dto.email()) &&
+                        dto.address() == null
+        ) {
+            throw new InvalidFieldException("At least one field must be provided for update.");
         }
     }
 
-    // DELETE
-    public void validateDelete(ClientCompany entity) {
-        var user = securityService.getLoggedUser();
-        assertOwnedByUser(entity, user.getId());
+    // =================== SOFT DELETE ===================
 
-        // dependências futuras podem ser validadas aqui
-    }
-
-    private boolean notBlank(String s) {
-        return s != null && !s.trim().isEmpty();
-    }
-
-    private void assertOwnedByUser(ClientCompany entity, UUID userId) {
-        if (entity.getUserId() == null || !entity.getUserId().equals(userId)) {
-            throw new ForbiddenAcessException("ClientCompany does not belong to the authenticated user.");
+    public void validateSoftDelete(ClientCompany company) {
+        if (company == null) {
+            throw new MissingRequiredFieldException("ClientCompany cannot be null.");
         }
+
+        if (Boolean.TRUE.equals(company.getDeleted())) {
+            throw new InvalidFieldException("ClientCompany is already deleted.");
+        }
+    }
+
+    public void validateNotDeleted(ClientCompany company) {
+        if (company == null) {
+            throw new MissingRequiredFieldException("ClientCompany cannot be null.");
+        }
+
+        if (Boolean.TRUE.equals(company.getDeleted())) {
+            throw new InvalidFieldException("Operation not allowed on deleted ClientCompany.");
+        }
+    }
+
+    // =================== SEARCH ===================
+
+    public void validateSearch(Integer page, Integer pageSize) {
+        if (page != null && page < 0) {
+            throw new InvalidFieldException("Page index cannot be negative.");
+        }
+
+        if (pageSize != null && pageSize <= 0) {
+            throw new InvalidFieldException("Page size must be greater than zero.");
+        }
+
+        if (pageSize != null && pageSize > 100) {
+            throw new InvalidFieldException("Page size max limit is 100.");
+        }
+    }
+    private boolean isBlank(String s) {
+        return s == null || s.trim().isEmpty();
+    }
+    public AppUser resolveOwner(UUID userId) {
+        if (userId == null) {
+            throw new MissingRequiredFieldException("Field 'userId' is required.");
+        }
+        return appUserService.findById(userId);
     }
 }

@@ -89,7 +89,7 @@ class AppUserServiceTest {
         assertEquals("sandro@x.com", u.getEmail());
         assertEquals("ENC", u.getPassword());
         assertTrue(u.isEnabled());
-        assertFalse(u.isDeleted());
+        assertFalse(u.getDeleted() );
         assertEquals(AuthProvider.LOCAL, u.getAuthProvider());
         assertEquals(Set.of(UserRole.CLIENT), u.getRoles());
         assertNull(u.getAddress());
@@ -395,7 +395,7 @@ class AppUserServiceTest {
         verify(validator).ensureNotDeletedForWrite(existing);
         verify(repository).save(existing);
 
-        assertTrue(existing.isDeleted());
+        assertTrue(existing.getDeleted());
         assertFalse(existing.isEnabled());
     }
 
@@ -449,7 +449,7 @@ class AppUserServiceTest {
         verify(validator).ensureNotDeletedForWrite(existing);
         verify(repository).save(existing);
 
-        assertTrue(result.isDeleted());
+        assertTrue(result.getDeleted());
         assertFalse(result.isEnabled());
     }
 

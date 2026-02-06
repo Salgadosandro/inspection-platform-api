@@ -1,12 +1,10 @@
 package com.vectorlabs.dto.clientcompany;
 
+import com.vectorlabs.dto.address.UpdateAddressDTO;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
 
-import java.util.UUID;
-
 public record UpdateClientCompanyDTO(
-
-        UUID addressId,
 
         @Size(max = 200)
         String corporateName,
@@ -21,6 +19,11 @@ public record UpdateClientCompanyDTO(
         String phone,
 
         @Size(max = 150)
-        String email
-) {}
+        String email,
 
+        @Valid
+        UpdateAddressDTO address
+
+        // Eu NÃO deixaria active/deleted aqui por padrão.
+        // active/deleted eu separaria em endpoints/DTOs admin específicos.
+) {}

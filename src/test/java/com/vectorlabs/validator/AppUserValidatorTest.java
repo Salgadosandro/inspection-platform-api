@@ -135,7 +135,7 @@ class AppUserValidatorTest {
     @Test
     void ensureNotDeletedForRead_shouldThrowWhenDeleted() {
         AppUser user = mock(AppUser.class);
-        when(user.isDeleted()).thenReturn(true);
+        when(user.getDeleted()).thenReturn(true);
 
         var ex = assertThrows(IllegalArgumentException.class, () -> validator.ensureNotDeletedForRead(user));
         assertEquals("user is deleted", ex.getMessage());
@@ -144,7 +144,7 @@ class AppUserValidatorTest {
     @Test
     void ensureNotDeletedForRead_shouldNotThrowWhenNotDeleted() {
         AppUser user = mock(AppUser.class);
-        when(user.isDeleted()).thenReturn(false);
+        when(user.getDeleted()).thenReturn(false);
 
         assertDoesNotThrow(() -> validator.ensureNotDeletedForRead(user));
     }
@@ -152,7 +152,7 @@ class AppUserValidatorTest {
     @Test
     void ensureNotDeletedForWrite_shouldThrowWhenDeleted() {
         AppUser user = mock(AppUser.class);
-        when(user.isDeleted()).thenReturn(true);
+        when(user.getDeleted()).thenReturn(true);
 
         var ex = assertThrows(IllegalArgumentException.class, () -> validator.ensureNotDeletedForWrite(user));
         assertEquals("user is deleted", ex.getMessage());
@@ -161,7 +161,7 @@ class AppUserValidatorTest {
     @Test
     void ensureNotDeletedForWrite_shouldNotThrowWhenNotDeleted() {
         AppUser user = mock(AppUser.class);
-        when(user.isDeleted()).thenReturn(false);
+        when(user.getDeleted()).thenReturn(false);
 
         assertDoesNotThrow(() -> validator.ensureNotDeletedForWrite(user));
     }
@@ -173,7 +173,7 @@ class AppUserValidatorTest {
     @Test
     void ensureCanHardDelete_shouldThrowWhenNotSoftDeleted() {
         AppUser user = mock(AppUser.class);
-        when(user.isDeleted()).thenReturn(false);
+        when(user.getDeleted()).thenReturn(false);
 
         var ex = assertThrows(IllegalArgumentException.class, () -> validator.ensureCanHardDelete(user));
         assertEquals("hard delete only allowed after soft delete", ex.getMessage());
@@ -182,7 +182,7 @@ class AppUserValidatorTest {
     @Test
     void ensureCanHardDelete_shouldNotThrowWhenSoftDeleted() {
         AppUser user = mock(AppUser.class);
-        when(user.isDeleted()).thenReturn(true);
+        when(user.getDeleted()).thenReturn(true);
 
         assertDoesNotThrow(() -> validator.ensureCanHardDelete(user));
     }

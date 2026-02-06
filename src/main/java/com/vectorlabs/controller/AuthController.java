@@ -38,7 +38,7 @@ public class AuthController {
         AppUser user = appUserRepository.findByEmail(dto.email().trim().toLowerCase())
                 .orElseThrow(() -> new BadCredentialsException("Invalid credentials"));
 
-        if (user.isDeleted() || !user.isEnabled()) {
+        if (user.getDeleted()  || !user.isEnabled()) {
             throw new BadCredentialsException("Invalid credentials");
         }
 
@@ -73,7 +73,7 @@ public class AuthController {
         AppUser user = appUserRepository.findById(userId)
                 .orElseThrow(() -> new BadCredentialsException("Invalid token"));
 
-        if (user.isDeleted() || !user.isEnabled()) {
+        if (user.getDeleted() || !user.isEnabled()) {
             throw new BadCredentialsException("Invalid token");
         }
 

@@ -16,7 +16,6 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
-
 @MappedSuperclass
 @Getter
 @Setter
@@ -35,6 +34,20 @@ public abstract class Auditable {
 
     @Column(name = "updated_by")
     private UUID updatedBy;
+
+    // =================== SOFT DELETE (PADRÃO) ===================
+
+    @Column(name = "deleted", nullable = false)
+    @lombok.Builder.Default
+    private Boolean deleted = false;
+
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+
+    @Column(name = "deleted_by")
+    private UUID deletedBy;
+
+    // =================== LIFECYCLE ===================
 
     @PreUpdate
     protected void onUpdate() {
@@ -56,17 +69,30 @@ public abstract class Auditable {
         UUID currentUserId = resolveCurrentUserId().orElse(null);
         this.createdBy = currentUserId;
         this.updatedBy = currentUserId;
+
+        // garante default do deleted no insert (protege builder)
+        if (this.deleted == null) this.deleted = false;
+    }
+
+    // =================== API ÚTIL ===================
+
+    public void softDelete() {
+        if (Boolean.TRUE.equals(this.deleted)) return;
+        this.deleted = true;
+        this.deletedAt = Instant.now();
+        this.deletedBy = resolveCurrentUserId().orElse(null);
+    }
+
+    public void restore() {
+        this.deleted = false;
+        this.deletedAt = null;
+        this.deletedBy = null;
     }
 
     protected void beforeSave(boolean isNew) {
         // default: não faz nada
     }
 
-    /**
-     * Estratégia recomendada:
-     * - JWT: subject (sub) = UUID do usuário -> converte para UUID
-     * - Caso não seja JWT, retorna vazio (ou adapte se seu principal carregar UUID).
-     */
     protected Optional<UUID> resolveCurrentUserId() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 
@@ -74,17 +100,12 @@ public abstract class Auditable {
 
         Object principal = auth.getPrincipal();
 
-        // Resource Server JWT: principal costuma ser Jwt (ou JwtAuthenticationToken.getToken())
         if (principal instanceof Jwt jwt) {
             return parseUuid(jwt.getSubject())
-                    .or(() -> parseUuid(jwt.getClaimAsString("uid"))); // opcional
+                    .or(() -> parseUuid(jwt.getClaimAsString("uid")));
         }
 
-        // Se em algum ponto você usar um principal que já guarda UUID:
         if (principal instanceof UUID uuid) return Optional.of(uuid);
-
-        // Caso você crie um UserDetails custom que tenha getId():
-        // if (principal instanceof MyUserDetails u) return Optional.of(u.getId());
 
         return Optional.empty();
     }

@@ -65,7 +65,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     .orElseThrow(() -> new JwtException("User not found"));
 
             // Se quiser cortar token de usuário deletado/desabilitado
-            if (user.isDeleted() || !user.isEnabled()) {
+            if (user.getDeleted() || !user.isEnabled()) {
                 throw new JwtException("User disabled/deleted");
             }
 

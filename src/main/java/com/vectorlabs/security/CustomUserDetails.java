@@ -31,7 +31,7 @@ public class CustomUserDetails implements UserDetails {
         this.email = user.getEmail();
         this.password = user.getPassword();
         this.enabled = user.isEnabled();
-        this.deleted = user.isDeleted();
+        this.deleted = user.getDeleted();
         this.roles = user.getRoles();
     }
 

@@ -27,7 +27,7 @@ public class CustomUserDetailsService implements UserDetailsService {
                 .orElseThrow(() -> new UsernameNotFoundException("User not found for email: " + email));
 
         // Se você quer cortar cedo (além do isEnabled() do CustomUserDetails)
-        if (user.isDeleted()) {
+        if (user.getDeleted()) {
             throw new UsernameNotFoundException("User is deleted: " + email);
         }
 

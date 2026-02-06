@@ -40,18 +40,18 @@ public class AppUserValidator {
         //Regras futuras
     }
     public void ensureNotDeletedForRead(AppUser user) {
-        if (user.isDeleted()) {
+        if (user.getDeleted()) {
             throw new IllegalArgumentException("user is deleted");
         }
     }
     public void ensureNotDeletedForWrite(AppUser user) {
-        if (user.isDeleted()) {
+        if (user.getDeleted()) {
             throw new IllegalArgumentException("user is deleted");
         }
     }
     public void ensureCanHardDelete(AppUser user) {
         // política: hard delete só se já foi soft-deletado
-        if (!user.isDeleted()) {
+        if (!user.getDeleted()) {
             throw new IllegalArgumentException("hard delete only allowed after soft delete");
         }
     }

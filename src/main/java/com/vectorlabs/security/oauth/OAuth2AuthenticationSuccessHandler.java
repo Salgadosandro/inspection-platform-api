@@ -51,7 +51,7 @@ public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccess
             response.sendRedirect(redirectSuccessUrl + "?error=" + encode("user_not_found"));
             return;
         }
-        if (user.isDeleted() || !user.isEnabled()) {
+        if (user.getDeleted() || !user.isEnabled()) {
             response.sendRedirect(redirectSuccessUrl + "?error=" + encode("user_disabled"));
             return;
         }
