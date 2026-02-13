@@ -9,6 +9,7 @@ spring:
     password:
 
   jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
       ddl-auto: create-drop
     show-sql: true
@@ -21,7 +22,6 @@ spring:
 
 security:
   jwt:
-    # 32+ bytes (base64). Exemplo: "my-super-secret-key-com-32-bytes" -> base64
     secret: bXktc3VwZXItc2VjcmV0LWtleS1jb20tMzItYnl0ZXM=
     issuer: vectorlabs
     access-ttl-seconds: 3600
